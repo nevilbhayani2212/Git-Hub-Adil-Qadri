@@ -3317,6 +3317,11 @@ def get_top_selling_products(db: Session = Depends(get_db)):
                 discount_percentage = 0
                 rupees_saved = 0
 
+            reviews = db.query(Reviews).filter(Reviews.product_id == product.id).all()
+            total_reviews = len(reviews)
+            total_stars = sum([review.five_star for review in reviews]) if total_reviews > 0 else 0
+            avg_rating = round(total_stars / total_reviews, 1) if total_reviews > 0 else 0.0
+
             result.append({
                 "id": product.id,
                 "product_name": product.product_name,
@@ -3334,7 +3339,9 @@ def get_top_selling_products(db: Session = Depends(get_db)):
                 "availability": product.availability,
                 "sales_count": product.sales_count,
                 "total_quantity": product.total_quantity,
-                "created_at": product.created_at
+                "created_at": product.created_at,
+                'average_rating':avg_rating,
+                "total_reviews": total_reviews,
             })
 
         return {
