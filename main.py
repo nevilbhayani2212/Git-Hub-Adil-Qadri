@@ -477,20 +477,9 @@ async def add_categories(
 @app.get('/api/get-categories')
 async def get_categories(
     db: Session = Depends(get_db),
-    authorization: str = Header(...)
+
 ):
     try:
-        token = authorization.replace("Bearer ", "")
-        decoded_token = decode_token(token)
-        user_id = decoded_token.get("id")
-
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid or expired token")
-
-        user = db.query(Register).filter(Register.id == user_id).first()
-
-
-
         categories = db.query(Category).all()
 
         return {
