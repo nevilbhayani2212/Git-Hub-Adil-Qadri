@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime,timedelta
 import random
 from urllib.parse import urlencode, urlparse, urlunparse
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -10,7 +10,7 @@ import smtplib
 import jwt
 from fastapi.staticfiles import StaticFiles
 from requests import Session
-from sqlalchemy import asc, cast, desc, func
+from sqlalchemy import asc, cast, desc, func,and_
 import uvicorn
 from helper.otp import generate_otp
 from models import * 
@@ -27,24 +27,21 @@ razorpay_client = razorpay.Client(auth=("rzp_test_H953djhP2bC9c5", "OkObIansJTqK
 
 SECRET_KEY = "abcd123456987"  
 def encode_order_id(order_id: int) -> str:
-    """Generate a secure hash for the order ID"""
     data = f"{order_id}-{SECRET_KEY}"
     return hashlib.sha256(data.encode()).hexdigest()[:16]
 
 def decode_and_validate_order_id(encoded_id: str, order_id: int) -> bool:
-    """Validate if the encoded ID matches the order ID"""
     expected_hash = encode_order_id(order_id)
     return encoded_id == expected_hash
 
 def send_invoice_email(to_email: str, invoice_html: str):
-    """Send invoice email to customer"""
     subject = "Your Order Invoice"
     
     msg = MIMEMultipart()
     msg["From"] = SMTP_EMAIL
     msg["To"] = to_email
     msg["Subject"] = subject
-    msg.attach(MIMEText(invoice_html, "html"))  # Using HTML content type
+    msg.attach(MIMEText(invoice_html, "html"))  
 
     try:
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
@@ -130,7 +127,6 @@ def decode_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return {"id": payload.get("id")}
-    
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=400, detail="Token has expired")
     except jwt.JWTError:
@@ -141,7 +137,7 @@ def decode_token(token: str) -> dict:
 
 
 def generate_invoice_html(order: Order, order_items: list[OrderItem], address: Address) -> str:
-    # Load and encode the logo
+
     logo_path = Path("logo/logo.jpg")
     if logo_path.exists():
         logo_data = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
@@ -681,81 +677,6 @@ async def add_products(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
-    
-
-   
-
-
-# with pagination
-# @app.get('/get-products')
-# async def get_products(
-#     request: Request,
-#     category_id: Optional[int] = Query(None),
-#     page: int = Query(1, ge=1),
-#     page_size: int = Query(28, ge=1),
-#     db: Session = Depends(get_db)
-# ):
-#     try:
-#         skip = (page - 1) * page_size
-#         query = db.query(Products)
-
-#         if category_id:
-#             query = query.filter(Products.category_id == category_id)
-
-#         total_products = query.count()
-#         products = query.offset(skip).limit(page_size).all()
-        
-#         def build_url(new_page: int) -> Optional[str]:
-#             if new_page < 1 or new_page > (total_products + page_size - 1) // page_size:
-#                 return None
-#             query_params = dict(request.query_params)
-#             query_params["page"] = str(new_page)
-#             url_parts = list(urlparse(str(request.url)))
-#             url_parts[4] = urlencode(query_params)
-#             return urlunparse(url_parts)
-
-#         formatted_products = []
-#         for product in products:
-#             product_price = int(product.product_price)
-#             product_old_price = int(product.product_old_price)
-            
-#             # Calculate discount percentage (if old price exists and is greater than current price)
-#             if product_old_price > 0 and product_old_price > product_price:
-#                 discount_percentage = round(((product_old_price - product_price) / product_old_price) * 100)
-#                 rupees_saved = product_old_price - product_price
-#             else:
-#                 discount_percentage = 0
-#                 rupees_saved = 0
-                
-#             formatted_products.append({
-#                 "id": product.id,
-#                 "product_name": product.product_name,
-#                 "product_details": product.product_details,
-#                 "product_price": product_price,
-#                 "product_old_price": product_old_price,
-#                 "image": product.image if isinstance(product.image, list) else [img.strip() for img in product.image.split(",")],
-#                 "category_id": product.category_id,
-#                 "category_name": product.category.name if product.category else None,
-#                 "discount_percentage": discount_percentage,  
-#                 "rupees_saved": rupees_saved,  
-#                 "availability": product.availability,
-#                 "sales_count": product.sales_count,
-#                 "total_quantity": product.total_quantity,
-#                 "created_at": product.created_at,
-#             })
-            
-#         return {
-#             "count": total_products,
-#             "next": build_url(page + 1),
-#             "previous": build_url(page - 1),
-#             "results": formatted_products
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
-    
-
-
-
 
 
 @app.get('/api/get-products')
@@ -854,41 +775,6 @@ async def get_products(
 
 
 
-# @app.get("/get-product-by-id")
-# async def get_product_by_id(
-#     product_id: int = Form(...),
-#     db: Session = Depends(get_db)
-# ):
-#     try:
-#         product = db.query(Products).filter(Products.id == product_id).first()
-
-#         if not product:
-#             return {"status": False, "message": "Product not found"}
-
-#         product_data = {
-#             "id": product.id,
-#             "product_name": product.product_name,
-#             "product_details": product.product_details,
-#             "product_price": str(product.product_price),
-#             "product_old_price": str(product.product_old_price),
-#             "image": product.image if isinstance(product.image, list) else [img.strip() for img in product.image.split(",")],
-#             "category_id": product.category_id,
-#             "category_name": product.category.name if product.category else None,
-#             "discount_percentage": int(product.discount_percentage),
-#             "availability": product.availability,
-#             "fragrance": product.fragrance,
-#             "gender": product.gender,
-#             "notes": product.notes,
-#             "sales_count": product.sales_count,
-#             "created_at": product.created_at
-#         }
-
-#         return {"status": True, "product": product_data}
-
-#     except Exception as e:
-#         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
-    
-
 @app.get("/api/get-product-by-id/")
 async def get_product_by_id(
     product_id: int = Query(...),
@@ -900,7 +786,6 @@ async def get_product_by_id(
         if not product:
             return {"status": False, "message": "Product not found"}
 
-        # Calculate discount and savings
         product_price = int(product.product_price)
         product_old_price = int(product.product_old_price or 0)
         
@@ -1016,14 +901,12 @@ async def update_products(
 
         if total_quantity is not None:
             new_product.total_quantity = total_quantity
-            # If availability is not manually set, set based on total_quantity
             if availability is None:
                 if total_quantity > 0:
                     new_product.availability = True
                 elif total_quantity == 0:
                     new_product.availability = False
 
-        # Manual override of availability
         if availability is not None:
             new_product.availability = availability
 
@@ -1483,9 +1366,7 @@ async def get_offers(
 
         if not applicable_offers:
             return {"message": "No applicable offers based on your cart quantity"}
-
         return {"Available Offers": applicable_offers}
-
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
@@ -1549,7 +1430,6 @@ async def add_videos(
         db.refresh(videos_details)
 
         return videos_details
-
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error {str(e)}")
 
@@ -1603,7 +1483,6 @@ async def update_video(
         db.refresh(video_record)
 
         return {"message": "Video updated successfully", "video": video_record}
-
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error {str(e)}")
 
@@ -1643,7 +1522,6 @@ async def delete_video(
         db.commit()
 
         return {"message": "Video deleted successfully"}
-
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error {str(e)}")
     
@@ -1712,7 +1590,7 @@ async def filter_products(
             "total_unavailable": total_unavailable,
             "products": products
         }
-    
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Database error: {str(e)}")
 
@@ -1740,7 +1618,6 @@ async def search_products(
             return {"message": "No products found matching the search term."}
 
         return {'status':True,"message": "Products found", "Products": search_products}
-    
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
     
@@ -1779,7 +1656,6 @@ async def sort_by(
         sorting_products = products.order_by(sorting_options[sort_by]).all()
 
         return sorting_products
-
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Internal Server Error: {str(e)}")
 
@@ -1855,7 +1731,6 @@ async def add_reviews(
                 "review_date": db_reviews.review_date,
             }
         }
-
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
     
@@ -2278,8 +2153,6 @@ async def contact_us(
             "mobile_number": contact_us.mobile_number,
             "massage": contact_us.massage,
         }}
-
-
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
     
@@ -2627,7 +2500,7 @@ async def checkout(
                 "token": token,
                 "coupon_id": str(coupon_id) if coupon_id else ""
             },
-            "callback_url": f"https://glen-adverse-checkout-gp.trycloudflare.com/api/verify-payment-callback?order_id={new_order.id}",
+            "callback_url": f"https://suitable-arguably-bird.ngrok-free.app/api/verify-payment-callback?order_id={new_order.id}",
             "callback_method": "get"
         })
 
@@ -2657,6 +2530,8 @@ async def verify_payment_callback(
 ):
     try:
         order_id = int(request.query_params.get("order_id"))
+        razorpay_payment_id = request.query_params.get("razorpay_payment_id")
+
         order = db.query(Order).filter(Order.id == order_id).first()
 
         if not order:
@@ -2664,9 +2539,18 @@ async def verify_payment_callback(
 
         payment_link = razorpay_client.payment_link.fetch(order.razorpay_order_id)
 
+        print("\n\n=== RAZORPAY PAYMENT LINK RESPONSE ===")
+        print(payment_link)
+        print("====================================\n\n")
+
         if payment_link['status'] != 'paid':
             raise HTTPException(status_code=400, detail="Payment not completed yet")
 
+        if razorpay_payment_id:
+            payment = razorpay_client.payment.fetch(razorpay_payment_id)
+            print(f"\nPayment details: {payment}\n")  
+
+        order.payment_id = razorpay_payment_id
         order.status = OrderStatus.PAID.value
         order.razorpay_signature = "Payment completed."
 
@@ -2703,15 +2587,12 @@ async def verify_payment_callback(
         address = db.query(Address).filter(Address.id == order.address_id).first()
         invoice_html = generate_invoice_html(order, order_items, address)
 
-        # Get user email
         user = db.query(Register).filter(Register.id == order.user_id).first()
         if user and user.email:
             try:
-                # Send invoice email
                 send_invoice_email(user.email, invoice_html)
             except Exception as email_error:
-                # Log email error but don't fail the whole process
-                print(f"Failed to send invoice email: {str(email_error)}")
+                raise HTTPException(status_code=400, detail=f"An error occurred: {str(email_error)}")
 
         db.commit()
 
@@ -2725,56 +2606,100 @@ async def verify_payment_callback(
         return JSONResponse({"status": False,"message": f"Callback verification failed: {str(e)}"}, status_code=400)
 
 
-# @app.get('/api/order-history')
-# async def get_order_history(
-#     db: Session = Depends(get_db),
-#     authorization: str = Header(...)
-# ):
-#     try:
-#         token = authorization.replace("Bearer ", "")
-#         decoded_token = decode_token(token)
-#         user_id = decoded_token.get("id")
 
-#         if not user_id:
-#             raise HTTPException(status_code=400, detail="Invalid or missing token")
+# Add order cancellation endpoint
+@app.post('/api/cancel-order/{order_id}')
+async def cancel_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    authorization: str = Header(...)
+):
+    try:
+        token = authorization.replace("Bearer ", "")
+        decoded_token = decode_token(token)
+        user_id = decoded_token.get("id")
 
-#         orders = db.query(Order).filter(Order.user_id == user_id,Order.status != OrderStatus.PENDING.value).order_by(Order.created_at.desc()).all()
-        
-#         order_history = []
-#         for order in orders:
-#             items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
-            
-#             address = db.query(Address).filter(Address.id == order.address_id).first()
-            
-#             order_data = {
-#                 'order_id': order.id,
-#                 'total_amount': order.total_amount,
-#                 'status': order.status,
-#                 'created_at': order.created_at.strftime('%Y-%m-%d %H:%M:%S') if order.created_at else None,
-#                 'address': {
-#                     'full_name': address.full_name if address else "",
-#                     'mobile_number': address.mobile_number if address else "",
-#                     'address': f"{address.house_no}, {address.area}, {address.city}, {address.state}, {address.pincode}" if address else "",
-#                 },
-#                 'items': [{
-#                     'id':item.id,
-#                     'name': item.name,
-#                     'price': item.price,
-#                     'quantity': item.quantity,
-#                     'image': item.image.split(',')[0] if item.image else None
-#                 } for item in items]
-#             }
-            
-#             order_history.append(order_data)
-#         return {'status': True,'orders': order_history}
-#     except Exception as e:
-#         raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
+        order = db.query(Order).filter(
+            Order.id == order_id,
+            Order.user_id == user_id,
+            Order.status.in_([OrderStatus.PENDING.value, OrderStatus.PAYMENT_PENDING.value])
+        ).first()
 
+        if not order:
+            raise HTTPException(status_code=400, detail="Order not found or cannot be cancelled")
+
+        # Initiate refund if payment was made
+        if order.status == OrderStatus.PAID.value:
+            try:
+                refund = razorpay_client.payment.refund(
+                    order.payment_id,
+                    {"amount": int(order.total_amount * 100)}
+                )
+                order.status = OrderStatus.REFUNDED.value
+            except Exception as e:
+                raise HTTPException(status_code=400, detail="Refund failed")
+        else:
+            order.status = OrderStatus.CANCELLED.value
+
+        db.commit()
+        return {"status": True, "message": "Order cancelled successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+
+@app.get('/api/admin/cancelled-orders')
+async def get_cancelled_orders(
+    db: Session = Depends(get_db),
+    authorization: str = Header(...)
+):
+    try:
+        token = authorization.replace("Bearer ", "")
+        decoded_token = decode_token(token)
+        user_id = decoded_token.get("id")
+
+        user = db.query(Register).filter(Register.id == user_id).first()
+        if not user.is_admin:
+            raise HTTPException(status_code=400, detail="Admin access required")
+
+        cancelled_orders = db.query(Order).filter(
+            Order.status.in_([OrderStatus.CANCELLED.value, OrderStatus.REFUNDED.value])
+        ).order_by(Order.created_at.desc()).all()
+
+        cancelled_orders_list = []
+        for order in cancelled_orders:
+            user = db.query(Register).filter(Register.id == order.user_id).first()
+            items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+            
+            cancelled_orders_list.append({
+                'order_id': order.id,
+                'payment_id': order.payment_id,
+                'user': {
+                    'name': f"{user.first_name} {user.last_name}" if user else "Unknown",
+                    'email': user.email if user else None
+                },
+                'total_amount': order.total_amount,
+                'status': order.status,
+                'cancelled_at': order.updated_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'items': [{
+                    'name': item.name,
+                    'quantity': item.quantity,
+                    'price': item.price
+                } for item in items]
+            })
+
+        return {
+            'status': True,
+            'cancelled_orders': cancelled_orders_list
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
 
 
 @app.get('/api/order-history')
 async def get_order_history(
-    request: Request,  # Add request parameter to access base_url
+    request: Request, 
     db: Session = Depends(get_db),
     authorization: str = Header(...)
 ):
@@ -2798,16 +2723,11 @@ async def get_order_history(
             
             order_hash = encode_order_id(order.id)
             
-            # Construct full URL using request.base_url
             base_url = str(request.base_url)
             invoice_url = f"{base_url}api/order/invoice/{order_hash}"
             
-            # Alternative if you need to force HTTPS:
-            # secure_base_url = str(request.base_url).replace('http://', 'https://')
-            # invoice_url = f"{secure_base_url}api/order/invoice/{order_hash}"
-            
             order_data = {
-                'order_hash': order.id,
+                'order_id': order.id,
                 'total_amount': order.total_amount,
                 'status': order.status,
                 'created_at': order.created_at.strftime('%Y-%m-%d %H:%M:%S') if order.created_at else None,
@@ -2823,7 +2743,7 @@ async def get_order_history(
                     'quantity': item.quantity,
                     'image': item.image.split(',')[0] if item.image else None
                 } for item in items],
-                'invoice_url': invoice_url  # Now includes full domain
+                'invoice_url': invoice_url  
             }
             
             order_history.append(order_data)
@@ -2831,9 +2751,6 @@ async def get_order_history(
         return {'status': True, 'orders': order_history}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
-
-    
-
 
 
 
@@ -2847,15 +2764,11 @@ async def get_order_detail(
         token = authorization.replace("Bearer ", "")
         decoded_token = decode_token(token)
         user_id = decoded_token.get("id")
-        # is_admin = decoded_token.get("is_admin", False)
 
         if not user_id:
             raise HTTPException(status_code=400, detail="Invalid or missing token")
 
         order_query = db.query(Order)
-        
-        # if not is_admin:
-        #     order_query = order_query.filter(Order.user_id == user_id)    
             
         order = order_query.filter(Order.id == order_id).first()
         
@@ -2873,7 +2786,6 @@ async def get_order_detail(
             'total_amount': order.total_amount,
             'status': order.status,
             'created_at': order.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-            'updated_at': order.updated_at.strftime('%Y-%m-%d %H:%M:%S'),
             'payment_id': order.payment_id,
             'razorpay_order_id': order.razorpay_order_id,
             'user': {
@@ -2901,11 +2813,7 @@ async def get_order_detail(
             } for item in items]
         }
         
-        return {
-            'status': True,
-            'order': order_detail
-        }
-        
+        return {'status': True,'order': order_detail}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
     
@@ -2915,6 +2823,7 @@ async def get_order_detail(
 # Get all orders (admin only)
 @app.get('/api/admin-orders')
 async def get_all_orders(
+    request: Request,  
     status: str = Query(None),
     db: Session = Depends(get_db),
     authorization: str = Header(...),
@@ -2929,7 +2838,6 @@ async def get_all_orders(
         if not user.is_admin:
             raise HTTPException(status_code=400, detail="Admin access required")
 
-        # query = db.query(Order)
         query = db.query(Order).filter(Order.status == OrderStatus.PAID.value)
 
         if status:
@@ -2947,8 +2855,14 @@ async def get_all_orders(
             
             address = db.query(Address).filter(Address.id == order.address_id).first()
             
+
+            order_hash = encode_order_id(order.id)
+            base_url = str(request.base_url)
+            invoice_url = f"{base_url}api/order/invoice/{order_hash}"
+
             order_data = {
                 'order_id': order.id,
+                'invoice_url': invoice_url,
                 'user': {
                     'name': f"{user.first_name} {user.last_name}" if user else "Unknown",
                     'email': user.email if user else None,
@@ -2971,10 +2885,7 @@ async def get_all_orders(
                 } if address else None
             }
             order_list.append(order_data)
-        return {
-            'status': True,
-            'orders': order_list
-        }  
+        return {'status': True,'orders': order_list}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
     
@@ -2983,7 +2894,7 @@ async def get_all_orders(
 
 
 # Update order status (admin only)
-@app.put('/api/admin-orders-status/{order_id}')
+@app.put('/api/admin-orders-status-update/{order_id}')
 async def update_order_status(
     order_id: int,
     status: str = Form(...),
@@ -3109,8 +3020,84 @@ async def admin_dashboard(
 
 
 
+
+
+@app.get('/api/recent-orders')
+async def get_recent_orders(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, description="Number of items per page"),
+    db: Session = Depends(get_db),
+    authorization: str = Header(...)
+):
+    try:
+        token = authorization.replace("Bearer ", "")
+        decoded_token = decode_token(token)
+        user_id = decoded_token.get("id")
+
+        if not user_id:
+            raise HTTPException(status_code=400, detail="User not found")
+
+        user = db.query(Register).filter(Register.id == user_id).first()
+
+        if not user or not user.is_admin:
+            raise HTTPException(status_code=400, detail="Admin access required")
+
+        skip = (page - 1) * page_size
+        total_orders = db.query(Order).count()
+        total_pages = (total_orders + page_size - 1) // page_size
+
+        recent_orders = (
+            db.query(Order)
+            .order_by(Order.created_at.desc())
+            .offset(skip)
+            .limit(page_size)
+            .all()
+        )
+
+        recent_orders_list = []
+        for order in recent_orders:
+            order_user = db.query(Register).filter(Register.id == order.user_id).first()
+
+            recent_order = {
+                'order_id': order.id,
+                'name': f"{order_user.first_name} {order_user.last_name}" if order_user else "Unknown",
+                'email': order_user.email if order_user else "Unknown",
+                'profile_image': order_user.profile_image if order_user else None,
+                'total_amount': order.total_amount,
+                'created_at': order.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            }
+
+            recent_orders_list.append(recent_order)
+
+        def build_url(new_page: int) -> Optional[str]:
+            if new_page < 1 or new_page > total_pages:
+                return None
+            query_params = dict(request.query_params)
+            query_params["page"] = str(new_page)
+            url_parts = list(urlparse(str(request.url)))
+            url_parts[4] = urlencode(query_params)
+            return urlunparse(url_parts)
+
+        return {
+            'status': True,
+            'next_page': build_url(page + 1),
+            'previous_page': build_url(page - 1),
+            'recent_orders': recent_orders_list
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
+
+
+
+
+
+    
+
 @app.get('/api/admin-orders-status')
 async def get_orders_by_status(
+    request: Request,
     status: str = Query(None), 
     db: Session = Depends(get_db),
     authorization: str = Header(...),
@@ -3146,8 +3133,13 @@ async def get_orders_by_status(
             
             address = db.query(Address).filter(Address.id == order.address_id).first()
             
+            order_hash = encode_order_id(order.id)
+            base_url = str(request.base_url)
+            invoice_url = f"{base_url}api/order/invoice/{order_hash}"
+
             order_data = {
                 'order_id': order.id,
+                'invoice_url':invoice_url,
                 'user': {
                     'name': f"{user.first_name} {user.last_name}" if user else "Unknown",
                     'email': user.email if user else None,
@@ -3261,7 +3253,6 @@ async def update_slider_image(
 
         image_path = save_slider_image(image)
         slider.image = image_path
-        # slider.created_at = datetime.datetime.utcnow()
 
         db.commit()
         db.refresh(slider)
@@ -3442,8 +3433,6 @@ async def get_trending_new_arrival_products(request: Request, db: Session = Depe
             })
         return {"count": len(result),"results": result}
     except Exception as e:
-
-
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
 @app.get("/api/get-sale")
@@ -3505,7 +3494,7 @@ async def create_coupon(
         
         user = db.query(Register).filter(Register.id == user_id).first()
         if not user.is_admin:
-            raise HTTPException(status_code=403, detail="Only admin can create coupons")
+            raise HTTPException(status_code=400, detail="Only admin can create coupons")
 
         existing_coupon = db.query(Coupon).filter(Coupon.code == code).first()
         if existing_coupon:
@@ -3591,11 +3580,11 @@ async def update_coupon(
         
         user = db.query(Register).filter(Register.id == user_id).first()
         if not user.is_admin:
-            raise HTTPException(status_code=403, detail="Only admin can update coupons")
+            raise HTTPException(status_code=400, detail="Only admin can update coupons")
 
         coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
         if not coupon:
-            raise HTTPException(status_code=404, detail="Coupon not found")
+            raise HTTPException(status_code=400, detail="Coupon not found")
 
         if code and code != coupon.code:
             existing_coupon = db.query(Coupon).filter(Coupon.code == code).first()
@@ -3648,11 +3637,11 @@ async def delete_coupon(
         
         user = db.query(Register).filter(Register.id == user_id).first()
         if not user.is_admin:
-            raise HTTPException(status_code=403, detail="Only admin can delete coupons")
+            raise HTTPException(status_code=400, detail="Only admin can delete coupons")
 
         coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
         if not coupon:
-            raise HTTPException(status_code=404, detail="Coupon not found")
+            raise HTTPException(status_code=400, detail="Coupon not found")
 
         usage_count = db.query(CouponUsage).filter(CouponUsage.coupon_id == coupon_id).count()
         if usage_count > 0:
@@ -3681,14 +3670,13 @@ async def get_all_products(
     authorization: str = Header(...)
 ):
     try:
-
         token = authorization.replace("Bearer ", "")
         decoded_token = decode_token(token)
         user_id = decoded_token.get("id")
         
         user = db.query(Register).filter(Register.id == user_id).first()
         if not user.is_admin:
-            raise HTTPException(status_code=403, detail="Only admin can delete coupons")
+            raise HTTPException(status_code=400, detail="Only admin can delete coupons")
         
         skip = (page - 1) * page_size
         query = db.query(Products)
@@ -3758,24 +3746,6 @@ async def get_all_products(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
-
-
-# @app.get('/api/order/invoice/{order_id}', response_class=HTMLResponse)
-# async def get_invoice(
-#     order_id: int,
-#     db: Session = Depends(get_db),
-# ):
-#     try:
-#         order = db.query(Order).filter(Order.id == order_id,).first()
-#         if not order:
-#             raise HTTPException(status_code=404, detail="Order not found")
-#         order_items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
-#         address = db.query(Address).filter(Address.id == order.address_id).first()
-#         invoice_html = generate_invoice_html(order, order_items, address)
-        
-#         return HTMLResponse(content=invoice_html)
-#     except Exception as e:
-#         raise HTTPException(status_code=400, detail=str(e))
     
 
 @app.get('/api/order/invoice/{order_hash}', response_class=HTMLResponse)
@@ -3784,10 +3754,8 @@ async def get_invoice(
     db: Session = Depends(get_db)
 ):
     try:
-        # Find all orders that could match this hash
         orders = db.query(Order).all()
         
-        # Find the order that matches the hash
         matched_order = None
         for order in orders:
             if decode_and_validate_order_id(order_hash, order.id):
@@ -3795,23 +3763,202 @@ async def get_invoice(
                 break
         
         if not matched_order:
-            raise HTTPException(status_code=404, detail="Order not found")
+            raise HTTPException(status_code=400, detail="Order not found")
         
-        # Get order details
         order_items = db.query(OrderItem).filter(OrderItem.order_id == matched_order.id).all()
         address = db.query(Address).filter(Address.id == matched_order.address_id).first()
         
         if not address:
-            raise HTTPException(status_code=404, detail="Address not found")
+            raise HTTPException(status_code=400, detail="Address not found")
             
         invoice_html = generate_invoice_html(matched_order, order_items, address)
         return HTMLResponse(content=invoice_html)
-        
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     
 
     
+@app.get('/api/admin/order-counts-by-date')
+async def get_order_counts_by_date(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format"),
+    db: Session = Depends(get_db),
+    authorization: str = Header(...)
+):
+    try:
+        token = authorization.replace("Bearer ", "")
+        decoded_token = decode_token(token)
+        user_id = decoded_token.get("id")
+        
+        user = db.query(Register).filter(Register.id == user_id).first()
+        if not user.is_admin:
+            raise HTTPException(status_code=400, detail="Only admin can access this data")
+
+        try:
+            start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+            end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+        if start_date > end_date:
+            raise HTTPException(status_code=400, detail="Start date must be before end date")
+
+        result = {}
+        current_date = start_date
+        
+        db_counts = (
+            db.query(
+                func.date(Order.created_at).label('order_date'),
+                func.count(Order.id).label('count')
+            )
+            .filter(
+                and_(
+                    func.date(Order.created_at) >= start_date,
+                    func.date(Order.created_at) <= end_date,
+                    Order.status != OrderStatus.PENDING.value
+                )
+            )
+            .group_by(func.date(Order.created_at))
+            .all()
+        )
+
+        db_date_counts = {date: count for date, count in db_counts}
+        print(db_date_counts)
+
+        while current_date <= end_date:
+            date_str = current_date.strftime("%Y-%m-%d")
+            result[date_str] = db_date_counts.get(date_str, 0)
+            current_date += timedelta(days=1)
+
+
+        return {
+            'status': True,
+            'data': {
+                'order_counts': result
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
+    
+
+
+
+@app.get('/api/user-profile')
+async def get_user_profile(
+    db: Session = Depends(get_db),
+    authorization: str = Header(...)
+):
+    try:
+        token = authorization.replace("Bearer ", "")
+        decoded_token = decode_token(token)
+        user_id = decoded_token.get("id")
+
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid or missing token")
+
+        user = db.query(Register).filter(Register.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=400, detail="User not found")
+
+        # Get user's addresses
+        addresses = db.query(Address).filter(Address.user_id == user_id).all()
+        formatted_addresses = []
+        for address in addresses:
+            formatted_addresses.append({
+                "id": address.id,
+                "full_name": address.full_name,
+                "mobile_number": address.mobile_number,
+                "house_no": address.house_no,
+                "area": address.area,
+                "city": address.city,
+                "pincode": address.pincode,
+                "state": address.state,
+                "country": address.country
+            })
+
+        profile_data = {
+            "status": True,
+            "user": {
+                "id": user.id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "email": user.email,
+                "profile_image": user.profile_image,
+                "addresses": formatted_addresses,
+            }
+        }
+
+        return profile_data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+
+
+@app.put('/api/update-profile')
+async def update_profile(
+    first_name: Optional[str] = Form(None),
+    last_name: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    profile_image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    authorization: str = Header(...)
+):
+    try:
+        token = authorization.replace("Bearer ", "")
+        decoded_token = decode_token(token)
+        user_id = decoded_token.get("id")
+
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid or missing token")
+
+        user = db.query(Register).filter(Register.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=400, detail="User not found")
+
+        if first_name is not None:
+            user.first_name = first_name
+        if last_name is not None:
+            user.last_name = last_name
+        if email is not None:
+            existing_user = db.query(Register).filter(
+                Register.email == email,
+                Register.id != user_id
+            ).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="Email already registered")
+            user.email = email
+
+        if profile_image is not None:
+            if user.profile_image:
+                old_image_path = user.profile_image
+                if os.path.exists(old_image_path):
+                    os.remove(old_image_path)
+
+            os.makedirs("uploads/profiles", exist_ok=True)
+            image_path = f"uploads/profiles/profile_{user_id}_{profile_image.filename}"
+            with open(image_path, "wb") as buffer:
+                buffer.write(await profile_image.read())
+            user.profile_image = image_path
+
+        db.commit()
+        db.refresh(user)
+
+        return {
+            "status": True,
+            "message": "Profile updated successfully",
+            "user": {
+                "id": user.id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "email": user.email,
+                "is_admin": user.is_admin,
+                "profile_image": user.profile_image
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

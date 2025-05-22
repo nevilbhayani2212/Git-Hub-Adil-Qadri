@@ -1,4 +1,3 @@
-
 import datetime
 import enum
 from sqlalchemy import (
@@ -35,6 +34,7 @@ class Register(Base):
     password = Column(String, index=True)
     is_admin = Column(Boolean, default=False)
     otp = Column(String)
+    profile_image = Column(String, nullable=True)
 
 
 class Address(Base):
