@@ -1954,12 +1954,14 @@ async def get_reviews(
         formatted_reviews = []
         for review in reviews:
             user = review.user 
-            full_name = f"{user.first_name} {user.last_name}" if user else "Anonymous"
+            full_name = f"{user.first_name} {user.last_name}" 
+            profile_image = user.profile_image if user and user.profile_image else ''
             
             formatted_reviews.append({
                 "id": review.id,
                 "user_id": review.user_id,
                 "name": full_name,
+                "profile_image": profile_image,
                 "rating": review.five_star,
                 "title": review.title,
                 "note": review.note,
