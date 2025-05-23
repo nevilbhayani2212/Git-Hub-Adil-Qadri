@@ -10,7 +10,7 @@ import smtplib
 import jwt
 from fastapi.staticfiles import StaticFiles
 from requests import Session
-from sqlalchemy import asc, cast, desc, func,and_
+from sqlalchemy import asc, cast, desc, func,and_,or_
 import uvicorn
 from helper.otp import generate_otp
 from models import * 
@@ -136,8 +136,107 @@ def decode_token(token: str) -> dict:
 
 
 
-def generate_invoice_html(order: Order, order_items: list[OrderItem], address: Address) -> str:
+# def generate_invoice_html(order: Order, order_items: list[OrderItem], address: Address) -> str:
 
+#     logo_path = Path("logo/logo.jpg")
+#     if logo_path.exists():
+#         logo_data = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
+#         logo_html = f'''
+#         <div style="
+#             display: inline-block;
+#             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+#             border-radius: 8px;
+#             padding: 4px;
+#             background: white;
+#         ">
+#             <img src="data:image/jpeg;base64,{logo_data}" 
+#                  alt="Company Logo" 
+#                  style="max-height: 50px; display: block; border-radius: 4px;">
+#         </div>
+#         '''
+    
+#     invoice_date = order.created_at.strftime("%d %b, %Y")
+#     total_amount = order.total_amount
+    
+#     items_html = ""
+#     for item in order_items:
+#         items_html += f"""
+#         <tr>
+#             <td>{item.name}</td>
+#             <td>{item.quantity}</td>
+#             <td>₹{item.price:.2f}</td>
+#             <td>₹{item.price * item.quantity:.2f}</td>
+#         </tr>
+#         """
+    
+#     invoice_html = f"""
+#     <!DOCTYPE html>
+#     <html>
+#     <head>
+#         <style>
+#             body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+#             .invoice-box {{ max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; }}
+#             .header {{ display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }}
+#             .address {{ margin-bottom: 20px; }}
+#             table {{ width: 100%; border-collapse: collapse; }}
+#             th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+#             .total {{ font-weight: bold; font-size: 1.2em; }}
+#             .footer {{ margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; }}
+#             .logo {{ max-height: 80px; }}
+#         </style>
+#     </head>
+#     <body>
+#         <div class="invoice-box">
+#             <div class="header">
+#                 <div>
+#                     <h2>Invoice #{order.id}</h2>
+#                     <p>Date: {invoice_date}</p>
+#                 </div>
+#                 <div>
+#                     {logo_html}
+#                 </div>
+#             </div>
+            
+#             <div class="address">
+#                 <h4>Shipping Address:</h4>
+#                 <p>{address.full_name}</p>
+#                 <p>{address.house_no}, {address.area}</p>
+#                 <p>{address.city}, {address.state} - {address.pincode}</p>
+#                 <p>{address.country}</p>
+#                 <p>Phone: {address.mobile_number}</p>
+#             </div>
+            
+#             <table>
+#                 <thead>
+#                     <tr>
+#                         <th>Product</th>
+#                         <th>Quantity</th>
+#                         <th>Unit Price</th>
+#                         <th>Total</th>
+#                     </tr>
+#                 </thead>
+#                 <tbody>
+#                     {items_html}
+#                 </tbody>
+#                 <tfoot>
+#                     <tr class="total">
+#                         <td colspan="3">Total Amount</td>
+#                         <td>₹{total_amount:.2f}</td>
+#                     </tr>
+#                 </tfoot>
+#             </table>
+            
+#             <div class="footer">
+#                 <p>Thank you for your order!</p>
+#             </div>
+#         </div>
+#     </body>
+#     </html>
+#     """
+#     return invoice_html
+
+
+def generate_invoice_html(order: Order, order_items: list[OrderItem], address: Address) -> str:
     logo_path = Path("logo/logo.jpg")
     if logo_path.exists():
         logo_data = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
@@ -156,7 +255,11 @@ def generate_invoice_html(order: Order, order_items: list[OrderItem], address: A
         '''
     
     invoice_date = order.created_at.strftime("%d %b, %Y")
+    subtotal = sum(item.price * item.quantity for item in order_items)
     total_amount = order.total_amount
+    
+    # Calculate discount amount
+    discount_amount = subtotal - total_amount if subtotal > total_amount else 0
     
     items_html = ""
     for item in order_items:
@@ -183,6 +286,9 @@ def generate_invoice_html(order: Order, order_items: list[OrderItem], address: A
             .total {{ font-weight: bold; font-size: 1.2em; }}
             .footer {{ margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; }}
             .logo {{ max-height: 80px; }}
+            .discount {{ color: #4CAF50; }}
+            .subtotal-row {{ border-top: 1px solid #ddd; }}
+            .discount-row {{ color: solid #ddd; }}
         </style>
     </head>
     <body>
@@ -217,6 +323,14 @@ def generate_invoice_html(order: Order, order_items: list[OrderItem], address: A
                 </thead>
                 <tbody>
                     {items_html}
+                    <tr class="subtotal-row">
+                        <td colspan="3">Subtotal</td>
+                        <td>₹{subtotal:.2f}</td>
+                    </tr>
+                    {f'''<tr class="discount-row">
+                        <td colspan="3">Coupon Discount</td>
+                        <td>-₹{discount_amount:.2f}</td>
+                    </tr>''' if discount_amount > 0 else ''}
                 </tbody>
                 <tfoot>
                     <tr class="total">
@@ -226,6 +340,8 @@ def generate_invoice_html(order: Order, order_items: list[OrderItem], address: A
                 </tfoot>
             </table>
             
+            {f'<p class="discount">You saved ₹{discount_amount:.2f} with your coupon!</p>' if discount_amount > 0 else ''}
+            
             <div class="footer">
                 <p>Thank you for your order!</p>
             </div>
@@ -234,8 +350,6 @@ def generate_invoice_html(order: Order, order_items: list[OrderItem], address: A
     </html>
     """
     return invoice_html
-
-
 
 
 
@@ -716,8 +830,8 @@ async def get_products(
 
         formatted_products = []
         for product in products:
-            product_price = int(product.product_price)
-            product_old_price = int(product.product_old_price or 0)
+            product_price = float(product.product_price)
+            product_old_price = float(product.product_old_price or 0)
             
             if product_old_price > 0 and product_old_price > product_price:
                 discount_percentage = round(((product_old_price - product_price) / product_old_price) * 100)
@@ -775,8 +889,8 @@ async def get_product_by_id(
         if not product:
             return {"status": False, "message": "Product not found"}
 
-        product_price = int(product.product_price)
-        product_old_price = int(product.product_old_price or 0)
+        product_price = float(product.product_price)
+        product_old_price = float(product.product_old_price or 0)
         
         if product_old_price > 0 and product_old_price > product_price:
             discount_percentage = round(((product_old_price - product_price) / product_old_price * 100))
@@ -1595,18 +1709,34 @@ async def search_products(
     try:
         search_lower = f"%{search_product.lower()}%"
 
-
-        search_products = db.query(Products).filter(
+        search_products = db.query(Products).join(Category).filter(
             (Products.product_name.ilike(search_lower)) |
-            (Products.fragrance.ilike(search_lower)) |
-            (Products.gender.ilike(search_lower)) |
-            (Products.notes.ilike(search_lower))
+            (Products.product_details.ilike(search_lower)) |
+            (Products.product_price.ilike(search_lower)) |
+            (Category.name.ilike(search_lower))
         ).all()
 
         if not search_products:
             return {"message": "No products found matching the search term."}
 
-        return {'status':True,"message": "Products found", "Products": search_products}
+        formatted_products = [{
+            "id": product.id,
+                "product_name": product.product_name,
+                "product_details": product.product_details,
+                "product_price": int(product.product_price),
+                "product_old_price": int(product.product_old_price),
+                "new_arrival": product.new_arrival,
+                "is_trending": product.is_trending,
+                "is_sale": product.is_sale,
+                "image": product.image if isinstance(product.image, list) else [img.strip() for img in product.image.split(",")],
+                "category_id": product.category_id,
+                "category_name": product.category.name if product.category else None,
+                "availability": product.availability,
+                "created_at": product.created_at,
+
+        } for product in search_products]
+
+        return {'status': True, "message": "Products found", "Products": formatted_products}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
     
@@ -3101,11 +3231,12 @@ async def get_orders_by_status(
         if not user.is_admin:
             raise HTTPException(status_code=400, detail="Admin access required")
 
-        valid_statuses = [OrderStatus.PENDING.value, OrderStatus.PAID.value, 
-                          OrderStatus.PROCESSING.value, OrderStatus.SHIPPED.value, 
-                          OrderStatus.DELIVERED.value, OrderStatus.CANCELLED.value]
+        valid_statuses = [OrderStatus.PAID.value, OrderStatus.PROCESSING.value, 
+                         OrderStatus.SHIPPED.value, OrderStatus.DELIVERED.value, 
+                         OrderStatus.CANCELLED.value]
 
-        query = db.query(Order)
+
+        query = db.query(Order).filter(Order.status != OrderStatus.PENDING.value)
 
         if status:
             if status not in valid_statuses:
@@ -3287,8 +3418,8 @@ def get_top_selling_products(db: Session = Depends(get_db)):
 
         result = []
         for product in top_products:
-            product_price = int(product.product_price)
-            product_old_price = int(product.product_old_price or 0)
+            product_price = float(product.product_price)
+            product_old_price = float(product.product_old_price or 0)
 
             if product_old_price > 0 and product_old_price > product_price:
                 discount_percentage = round(((product_old_price - product_price) / product_old_price) * 100)
@@ -3343,8 +3474,8 @@ async def get_discounted_products(request: Request, db: Session = Depends(get_db
 
         for product in query:
             try:
-                product_price = int(product.product_price)
-                product_old_price = int(product.product_old_price or 0)
+                product_price = float(product.product_price)
+                product_old_price = float(product.product_old_price or 0)
             except:
                 continue
 
@@ -3392,8 +3523,8 @@ async def get_trending_new_arrival_products(request: Request, db: Session = Depe
 
         for product in products:
             try:
-                product_price = int(product.product_price)
-                product_old_price = int(product.product_old_price or 0)
+                product_price = float(product.product_price)
+                product_old_price = float(product.product_old_price or 0)
             except:
                 continue
 
@@ -3433,8 +3564,8 @@ async def get_sale_products(request: Request, db: Session = Depends(get_db)):
 
         for product in products:
             try:
-                product_price = int(product.product_price)
-                product_old_price = int(product.product_old_price or 0)
+                product_price = float(product.product_price)
+                product_old_price = float(product.product_old_price or 0)
             except:
                 continue
 
@@ -3653,6 +3784,7 @@ async def delete_coupon(
 async def get_all_products(
     request: Request,
     category_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1),
@@ -3665,13 +3797,27 @@ async def get_all_products(
         
         user = db.query(Register).filter(Register.id == user_id).first()
         if not user.is_admin:
-            raise HTTPException(status_code=400, detail="Only admin can delete coupons")
-        
+            raise HTTPException(status_code=400, detail="Only admin can access products list")
+
         skip = (page - 1) * page_size
         query = db.query(Products)
 
+        # 🔍 Apply filters
         if category_id:
             query = query.filter(Products.category_id == category_id)
+
+        if search:
+            search_term = f"%{search.lower()}%"
+            
+            query = query.join(Category, Products.category).filter(
+                or_(
+                    Products.product_name.ilike(search_term),
+                    Products.product_details.ilike(search_term),
+                    Products.product_price.ilike(search_term),
+                    Category.name.ilike(search_term)
+                )
+            )
+
 
         query = query.order_by(Products.created_at.desc())
 
@@ -3689,8 +3835,8 @@ async def get_all_products(
 
         formatted_products = []
         for product in products:
-            product_price = int(product.product_price)
-            product_old_price = int(product.product_old_price or 0)
+            product_price = float(product.product_price)
+            product_old_price = float(product.product_old_price or 0)
 
             if product_old_price > 0 and product_old_price > product_price:
                 discount_percentage = round(((product_old_price - product_price) / product_old_price) * 100)
