@@ -1,5 +1,4 @@
 from datetime import datetime,timedelta
-import random
 from urllib.parse import urlencode, urlparse, urlunparse
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -132,108 +131,6 @@ def decode_token(token: str) -> dict:
     except jwt.JWTError:
         raise HTTPException(status_code=400, detail="Invalid token")
 
-
-
-
-
-# def generate_invoice_html(order: Order, order_items: list[OrderItem], address: Address) -> str:
-
-#     logo_path = Path("logo/logo.jpg")
-#     if logo_path.exists():
-#         logo_data = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
-#         logo_html = f'''
-#         <div style="
-#             display: inline-block;
-#             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-#             border-radius: 8px;
-#             padding: 4px;
-#             background: white;
-#         ">
-#             <img src="data:image/jpeg;base64,{logo_data}" 
-#                  alt="Company Logo" 
-#                  style="max-height: 50px; display: block; border-radius: 4px;">
-#         </div>
-#         '''
-    
-#     invoice_date = order.created_at.strftime("%d %b, %Y")
-#     total_amount = order.total_amount
-    
-#     items_html = ""
-#     for item in order_items:
-#         items_html += f"""
-#         <tr>
-#             <td>{item.name}</td>
-#             <td>{item.quantity}</td>
-#             <td>₹{item.price:.2f}</td>
-#             <td>₹{item.price * item.quantity:.2f}</td>
-#         </tr>
-#         """
-    
-#     invoice_html = f"""
-#     <!DOCTYPE html>
-#     <html>
-#     <head>
-#         <style>
-#             body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
-#             .invoice-box {{ max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; }}
-#             .header {{ display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }}
-#             .address {{ margin-bottom: 20px; }}
-#             table {{ width: 100%; border-collapse: collapse; }}
-#             th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-#             .total {{ font-weight: bold; font-size: 1.2em; }}
-#             .footer {{ margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; }}
-#             .logo {{ max-height: 80px; }}
-#         </style>
-#     </head>
-#     <body>
-#         <div class="invoice-box">
-#             <div class="header">
-#                 <div>
-#                     <h2>Invoice #{order.id}</h2>
-#                     <p>Date: {invoice_date}</p>
-#                 </div>
-#                 <div>
-#                     {logo_html}
-#                 </div>
-#             </div>
-            
-#             <div class="address">
-#                 <h4>Shipping Address:</h4>
-#                 <p>{address.full_name}</p>
-#                 <p>{address.house_no}, {address.area}</p>
-#                 <p>{address.city}, {address.state} - {address.pincode}</p>
-#                 <p>{address.country}</p>
-#                 <p>Phone: {address.mobile_number}</p>
-#             </div>
-            
-#             <table>
-#                 <thead>
-#                     <tr>
-#                         <th>Product</th>
-#                         <th>Quantity</th>
-#                         <th>Unit Price</th>
-#                         <th>Total</th>
-#                     </tr>
-#                 </thead>
-#                 <tbody>
-#                     {items_html}
-#                 </tbody>
-#                 <tfoot>
-#                     <tr class="total">
-#                         <td colspan="3">Total Amount</td>
-#                         <td>₹{total_amount:.2f}</td>
-#                     </tr>
-#                 </tfoot>
-#             </table>
-            
-#             <div class="footer">
-#                 <p>Thank you for your order!</p>
-#             </div>
-#         </div>
-#     </body>
-#     </html>
-#     """
-#     return invoice_html
 
 
 def generate_invoice_html(order: Order, order_items: list[OrderItem], address: Address) -> str:
@@ -1953,9 +1850,12 @@ async def get_reviews(
 
         formatted_reviews = []
         for review in reviews:
-            user = review.user 
-            full_name = f"{user.first_name} {user.last_name}" 
-            profile_image = user.profile_image if user and user.profile_image else ''
+            if review.user:
+                full_name = f"{review.user.first_name} {review.user.last_name}"
+                profile_image = review.user.profile_image if review.user.profile_image else ''
+            else:
+                full_name = "Anonymous User"
+                profile_image = ''
             
             formatted_reviews.append({
                 "id": review.id,
@@ -2435,95 +2335,6 @@ async def delete_address(
 # -------- R & D --------
     
 
-# @app.post('/api/checkout')
-# async def checkout(
-#     address_id: int = Form(...),
-#     db: Session = Depends(get_db),
-#     authorization: str = Header(...)
-# ):
-#     try:
-#         token = authorization.replace("Bearer ", "")
-#         decoded_token = decode_token(token)
-#         user_id = decoded_token.get("id")
-
-#         if not user_id:
-#             raise HTTPException(status_code=400, detail="Invalid or missing token")
-
-#         address = db.query(Address).filter(
-#             Address.id == address_id,
-#             Address.user_id == user_id
-#         ).first()
-
-#         if not address:
-#             raise HTTPException(status_code=400, detail="Address not found or does not belong to the user")
-
-#         cart_items = db.query(CartItem).filter(CartItem.user_id == user_id).all()
-#         if not cart_items:
-#             raise HTTPException(status_code=400, detail="Your cart is empty")
-
-#         total_amount = sum(float(item.price) for item in cart_items)
-
-#         new_order = Order(
-#             user_id=user_id,
-#             address_id=address_id,
-#             total_amount=total_amount,
-#             status=OrderStatus.PENDING.value
-#         )
-#         db.add(new_order)
-#         db.flush()
-
-#         for cart_item in cart_items:
-#             order_item = OrderItem(
-#                 order_id=new_order.id,
-#                 product_id=cart_item.product_id,
-#                 name=cart_item.name,
-#                 price=float(cart_item.price),
-#                 old_price=float(cart_item.old_price),
-#                 quantity=cart_item.quantity,
-#                 image=cart_item.image
-#             )
-#             db.add(order_item)
-
-#         user_email = db.query(Register).filter(Register.id == user_id).first().email
-
-#         payment_link = razorpay_client.payment_link.create({
-#             "amount": int(total_amount * 100),
-#             "currency": "INR",
-#             "description": "Order payment for your cart items",
-#             "customer": {
-#                 "name": address.full_name,
-#                 "email": user_email,
-#                 "contact": address.mobile_number
-#             },
-#             "notify": {
-#                 "sms": True,
-#                 "email": True
-#             },
-#             "notes": {
-#                 "order_id": str(new_order.id),
-#                 "token": token
-#             },
-#             "callback_url": f"https://compatible-loving-treasures-listed.trycloudflare.com/api/verify-payment-callback?order_id={new_order.id}",
-#             "callback_method": "get"
-#         })
-
-#         new_order.razorpay_order_id = payment_link['id']
-#         new_order.payment_link = payment_link['short_url']
-#         db.commit()
-
-#         return {
-#             "status": True,
-#             "message": "Order placed successfully. Please complete payment.",
-#             "order_id": new_order.id,
-#             "payment_status": "pending",
-#             "payment_link": payment_link['short_url']
-#         }
-
-#     except Exception as e:
-#         raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
-
-
-
 @app.post('/api/checkout')
 async def checkout(
     address_id: int = Form(...),
@@ -2739,17 +2550,25 @@ async def cancel_order(
         token = authorization.replace("Bearer ", "")
         decoded_token = decode_token(token)
         user_id = decoded_token.get("id")
-
+        print(user_id)
+        print("-----")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid or missing token")
+        print("-----")
         order = db.query(Order).filter(
             Order.id == order_id,
             Order.user_id == user_id,
-            Order.status.in_([OrderStatus.PENDING.value, OrderStatus.PAYMENT_PENDING.value])
+            Order.status.in_([
+                OrderStatus.PENDING.value,
+                OrderStatus.PAYMENT_PENDING.value,
+                OrderStatus.PAID.value
+            ])
         ).first()
-
+        print("-----")
+        print(order)
         if not order:
             raise HTTPException(status_code=400, detail="Order not found or cannot be cancelled")
 
-        # Initiate refund if payment was made
         if order.status == OrderStatus.PAID.value:
             try:
                 refund = razorpay_client.payment.refund(
@@ -2758,14 +2577,16 @@ async def cancel_order(
                 )
                 order.status = OrderStatus.REFUNDED.value
             except Exception as e:
-                raise HTTPException(status_code=400, detail="Refund failed")
+                raise HTTPException(status_code=400, detail="Refund failed")    
         else:
             order.status = OrderStatus.CANCELLED.value
 
         db.commit()
         return {"status": True, "message": "Order cancelled successfully"}
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 
 
@@ -2808,11 +2629,7 @@ async def get_cancelled_orders(
                     'price': item.price
                 } for item in items]
             })
-
-        return {
-            'status': True,
-            'cancelled_orders': cancelled_orders_list
-        }
+        return {'status': True,'cancelled_orders': cancelled_orders_list}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     
@@ -3557,6 +3374,7 @@ async def get_trending_new_arrival_products(request: Request, db: Session = Depe
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
+
 @app.get("/api/get-sale")
 async def get_sale_products(request: Request, db: Session = Depends(get_db)):
     try:
@@ -3915,7 +3733,7 @@ async def get_invoice(
     
 
     
-@app.get('/api/admin/order-counts-by-date')
+@app.get('/api/admin/order-counts-by-date/')
 async def get_order_counts_by_date(
     start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
     end_date: str = Query(..., description="End date in YYYY-MM-DD format"),
@@ -4093,6 +3911,68 @@ async def update_profile(
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+
+
+
+@app.get('/api/admin/sales-revenue-by-date/')
+async def get_sales_revenue_by_date(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format"),
+    db: Session = Depends(get_db),
+    authorization: str = Header(...)
+):
+    try:
+        token = authorization.replace("Bearer ", "")
+        decoded_token = decode_token(token)
+        user_id = decoded_token.get("id")
+        
+        user = db.query(Register).filter(Register.id == user_id).first()
+        if not user.is_admin:
+            raise HTTPException(status_code=400, detail="Only admin can access this data")
+
+        try:
+            start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+            end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+        if start_date > end_date:
+            raise HTTPException(status_code=400, detail="Start date must be before end date")
+
+        result = {}
+        current_date = start_date
+        
+        db_revenue = (
+            db.query(
+                func.date(Order.created_at).label('order_date'),
+                func.sum(Order.total_amount).label('revenue')
+            )
+            .filter(
+                and_(
+                    func.date(Order.created_at) >= start_date,
+                    func.date(Order.created_at) <= end_date,
+                    Order.status != OrderStatus.PENDING.value
+                )
+            )
+            .group_by(func.date(Order.created_at))
+            .all()
+        )
+
+        db_date_revenue = {date: revenue for date, revenue in db_revenue}
+
+        while current_date <= end_date:
+            date_str = current_date.strftime("%Y-%m-%d")
+            result[date_str] = float(db_date_revenue.get(date_str, 0))
+            current_date += timedelta(days=1)
+
+        return {
+            'status': True,
+            'data': {
+                'sales_revenue': result
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
 
 
 
