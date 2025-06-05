@@ -2996,6 +2996,23 @@ async def get_recent_orders(
         recent_orders_list = []
         for order in recent_orders:
             order_user = db.query(Register).filter(Register.id == order.user_id).first()
+            
+            order_items = (
+                db.query(OrderItem, Products)
+                .join(Products, OrderItem.product_id == Products.id)
+                .filter(OrderItem.order_id == order.id)
+                .all()
+            )
+            
+            products_list = []
+            for item, product in order_items:
+                products_list.append({
+                    'product_id': product.id,
+                    'title': product.product_name,
+                    'image': product.image,  
+                    'quantity': item.quantity,
+                    # 'price': item.price
+                })
 
             recent_order = {
                 'order_id': order.id,
@@ -3004,6 +3021,7 @@ async def get_recent_orders(
                 'profile_image': order_user.profile_image if order_user else None,
                 'total_amount': order.total_amount,
                 'created_at': order.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'products': products_list 
             }
 
             recent_orders_list.append(recent_order)
