@@ -1097,7 +1097,7 @@ async def get_cart_item(
                 "discount_percentage": discount_percentage,
                 "rupees_saved": rupees_saved
             })
-        return {'status': True,"cart_items": cart_data,"Total Payable": total_payable}
+        return {'status': True,"cart_items": cart_data,"total_payable": total_payable}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
