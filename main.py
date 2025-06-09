@@ -1075,9 +1075,10 @@ async def get_cart_item(
         cart_data = []
 
         for item in cart_items:
-            price = float(item.price)
-            old_price = float(item.old_price)
-            total_payable += price * item.quantity
+            price = round(float(item.price), 2)
+            old_price = round(float(item.old_price), 2)
+
+            total_payable += price 
             image_list = [img.strip() for img in item.image.split(",")] if item.image else []
 
             if old_price > 0 and old_price > price:
@@ -2361,7 +2362,7 @@ async def checkout(
         if not cart_items:
             raise HTTPException(status_code=400, detail="Your cart is empty")
 
-        total_amount = sum(float(item.price) * item.quantity for item in cart_items)
+        total_amount = sum(float(item.price) for item in cart_items)  
         discount_amount = 0
         applied_coupon_id = None
 
@@ -2446,8 +2447,8 @@ async def checkout(
             "order_id": new_order.id,
             "payment_status": "pending",
             "payment_link": payment_link['short_url'],
-            "discount_applied": discount_amount,
-            "final_amount": total_amount
+            "discount_applied": round(discount_amount, 2),
+            "final_amount": round(total_amount, 2)
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"An error occurred: {str(e)}")
