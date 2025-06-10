@@ -1075,10 +1075,11 @@ async def get_cart_item(
         cart_data = []
 
         for item in cart_items:
-            price = round(float(item.price), 2)
-            old_price = round(float(item.old_price), 2)
+            price = round(float(item.price) / item.quantity, 2)
+            old_price = round(float(item.old_price) / item.quantity, 2)
 
-            total_payable += price 
+            price_per_item = round(float(item.price), 2)
+            total_payable += price_per_item 
             image_list = [img.strip() for img in item.image.split(",")] if item.image else []
 
             if old_price > 0 and old_price > price:
